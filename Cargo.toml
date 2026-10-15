@@ -1,0 +1,21 @@
+[package]
+name = "fig-css"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+description = "The CSS thorn and leaf edit — a stylesheet and a style attribute — as a fig language, so every edit keeps the bytes it was not asked to change."
+repository = "https://github.com/diaryx-org/fig-css"
+readme = "README.md"
+
+[dependencies]
+# The splice engine: every edit to a stylesheet or a declaration list is one of
+# fig's, through the language this crate registers. 7.0 is fig in Rust alone.
+fig = { version = "7.0.0", default-features = false }
+
+[dev-dependencies]
+fig = { version = "7.0.0", features = ["helper"] }
+
+
+
+
