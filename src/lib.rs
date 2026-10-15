@@ -634,15 +634,26 @@ pub fn selectors(list: &str) -> Vec<&str> {
 
 /// The value a declaration list (a `style` attribute) gives `property`, as
 /// written; the last, where it repeats, since that is the one that applies.
+/// A property name matches without regard to case, as CSS reads one.
 /// `None` when it names no such property, or does not parse.
 pub fn declaration(list: &str, property: &str) -> Option<String> {
     let table = Css.parse(DECLARATIONS, list.as_bytes()).ok()?;
     let rows = &table.rows;
     members(rows, 0)
         .filter(|&kv| rows[kv + 2].kind != NodeKind::Mapping)
-        .filter(|&kv| rows[kv + 1].text.as_deref() == Some(property))
+        .filter(|&kv| same_property(rows[kv + 1].text.as_deref().unwrap_or(""), property))
         .last()
         .and_then(|kv| rows[kv + 2].text.clone())
+}
+
+/// Whether two property names are one property: without regard to ASCII
+/// case, as CSS compares them, except a custom property (`--brand`), whose
+/// name is case-sensitive.
+fn same_property(a: &str, b: &str) -> bool {
+    match a.starts_with("--") || b.starts_with("--") {
+        true => a == b,
+        false => a.eq_ignore_ascii_case(b),
+    }
 }
 
 /// Every declaration of a declaration list (a `style` attribute), in order,
@@ -670,7 +681,13 @@ pub fn declarations(list: &str) -> Vec<Declaration> {
 pub fn with_declaration(list: &str, property: &str, value: Option<&str>) -> Result<String, String> {
     let format = formats()?.declarations;
     let mut editor = fig::Editor::open(list.as_bytes(), format).map_err(|e| e.to_string())?;
-    let path = [fig::Segment::Key(property)];
+    // The property as the list already spells it, so `TEXT-ALIGN` is
+    // rewritten rather than joined by a second `text-align`.
+    let written = declarations(list)
+        .into_iter()
+        .find(|d| same_property(&d.property, property))
+        .map(|d| d.property);
+    let path = [fig::Segment::Key(written.as_deref().unwrap_or(property))];
     let result = match value {
         Some(value) => editor.set_value(&path, value),
         None if declaration(list, property).is_none() => return Ok(list.to_string()),
@@ -845,6 +862,23 @@ mod tests {
         );
         assert!(declarations("").is_empty());
         assert!(declarations("color: red; }").is_empty());
+    }
+
+    #[test]
+    fn a_property_name_is_matched_as_css_matches_it() {
+        assert_eq!(
+            declaration("TEXT-ALIGN: center", "text-align").as_deref(),
+            Some("center")
+        );
+        assert_eq!(declaration("--Brand: red", "--brand"), None);
+        assert_eq!(
+            with_declaration("Text-Align: center", "text-align", Some("right")).unwrap(),
+            "Text-Align: right"
+        );
+        assert_eq!(
+            with_declaration("Text-Align: center", "text-align", None).unwrap(),
+            ""
+        );
     }
 
     /// What leaf does to a paragraph's `style`: one property set, changed or
