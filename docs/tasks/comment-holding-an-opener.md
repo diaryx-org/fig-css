@@ -1,13 +1,19 @@
 ---
 title: A comment holding an opener cuts a value short
 description: A comment after a value or a selector that has `/*` inside it ends the value at that inner `/*`, and an edit to the value deletes the comment's head
-status: open
+status: done
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-24
 part_of: "[Tasks](tasks.md)"
 ---
 
 # A comment holding an opener cuts a value short
+
+**Status.** Done, by `fix: a comment holding an opener is one comment, not
+the end of a value`. `trim_end` now reads forwards, as the change below
+says, and `a_comment_holding_an_opener_is_one_comment` in `src/lib.rs` holds
+the three assertions, with a string holding `/*` or `*/` and two comments in
+a row beside them.
 
 CSS comments do not nest: `/* was /* blue */` is one comment, opened at the
 first `/*` and closed at the `*/`. `Parser::trim_end`, which takes a remark

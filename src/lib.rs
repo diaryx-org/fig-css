@@ -286,20 +286,34 @@ impl Parser<'_> {
     }
 
     /// `[from, to)` trimmed of whitespace and comments at its end, so a
-    /// name or a value is its own bytes and not a remark after them.
-    fn trim_end(&self, from: usize, mut to: usize) -> usize {
-        loop {
-            while to > from && self.b[to - 1].is_ascii_whitespace() {
-                to -= 1;
-            }
-            match self.b[from..to]
-                .ends_with(b"*/")
-                .then(|| self.src[from..to - 2].rfind("/*"))
-            {
-                Some(Some(open)) => to = from + open,
-                _ => return to,
+    /// name or a value is its own bytes and not a remark after them. Read
+    /// forwards, past strings and each comment from its own `/*` to the
+    /// first `*/`, since a comment does not nest: `/* a /* b */` is one.
+    fn trim_end(&self, from: usize, to: usize) -> usize {
+        let mut end = from;
+        let mut i = from;
+        while i < to {
+            match self.b[i] {
+                b'/' if self.b[i..to].starts_with(b"/*") => match self.comment_end(i, to) {
+                    Ok(close) => i = close,
+                    Err(_) => return to,
+                },
+                b'"' | b'\'' => {
+                    i = self.string_end(i, to).unwrap_or(to);
+                    end = i;
+                }
+                b'\\' => {
+                    i = (i + 2).min(to);
+                    end = i;
+                }
+                c if c.is_ascii_whitespace() => i += 1,
+                _ => {
+                    i += 1;
+                    end = i;
+                }
             }
         }
+        end
     }
 
     fn string(&mut self, parent: u32, from: usize, to: usize) -> u32 {
@@ -878,6 +892,38 @@ mod tests {
         assert_eq!(
             with_declaration("Text-Align: center", "text-align", None).unwrap(),
             ""
+        );
+    }
+
+    /// CSS comments do not nest, so a `/*` inside one is part of it and the
+    /// value or selector before it ends where the comment opens.
+    #[test]
+    fn a_comment_holding_an_opener_is_one_comment() {
+        let list = "fill: red /* was /* blue */";
+        assert_eq!(declaration(list, "fill").as_deref(), Some("red"));
+        assert_eq!(
+            with_declaration(list, "fill", Some("green")).unwrap(),
+            "fill: green /* was /* blue */"
+        );
+        let css = "a /* x /* y */ { fill: red }";
+        let rules = stylesheet(css).unwrap();
+        assert_eq!(&css[rules[0].prelude.clone()], "a");
+
+        assert_eq!(
+            declaration("stroke: #000 /* stroke: #333; /* old */", "stroke").as_deref(),
+            Some("#000")
+        );
+        assert_eq!(
+            declaration("fill: red /* a */ /* b */", "fill").as_deref(),
+            Some("red")
+        );
+        assert_eq!(
+            declaration("content: \"/* not */\" /* is */", "content").as_deref(),
+            Some("\"/* not */\"")
+        );
+        assert_eq!(
+            declaration("content: \"a*/\"", "content").as_deref(),
+            Some("\"a*/\"")
         );
     }
 
