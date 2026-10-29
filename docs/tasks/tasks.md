@@ -2,10 +2,11 @@
 title: Tasks
 description: Deferred work in fig-css — one file each, every one with a done state
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-29
 contents:
   - "[A comment holding an opener cuts a value short](comment-holding-an-opener.md)"
   - "[Setting a repeated property edits the one that does not apply](repeated-property-set-at-the-first.md)"
+  - "[A nested rule whose selector has a colon is read as a declaration](nested-rule-with-a-colon-read-as-a-declaration.md)"
 ---
 
 # Tasks
