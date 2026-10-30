@@ -617,12 +617,16 @@ fn rules_under(rows: &[NodeRow], parent: usize) -> Vec<Rule> {
 
 /// Whether an at-rule named by `prelude` holds rules rather than
 /// declarations: the one test the parser makes when it reads its block.
+/// CSS compares an at-rule's name without regard to ASCII case.
 fn holds_rule_list(prelude: &str) -> bool {
     let name = prelude
         .split(|c: char| c.is_whitespace() || c == '(')
         .next()
         .unwrap_or("");
-    prelude.starts_with('@') && !DECLARATION_AT_RULES.contains(&name)
+    prelude.starts_with('@')
+        && !DECLARATION_AT_RULES
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(name))
 }
 
 /// The selectors of a list, trimmed, split at its top-level commas — not
@@ -958,5 +962,43 @@ mod tests {
             set("text-align:center", "line-height", Some("1.5")),
             "text-align:center; line-height:1.5"
         );
+    }
+
+    /// An at-rule's name is compared without regard to ASCII case, as CSS
+    /// compares it, so `@Page` holds declarations as `@page` does.
+    #[test]
+    fn an_at_rule_holding_declarations_is_known_in_any_case() {
+        for (src, property, value) in [
+            (
+                "@FONT-FACE { font-family: X; src: url(a.woff) }\n",
+                "font-family",
+                "X",
+            ),
+            ("@Page { margin: 1in }\n", "margin", "1in"),
+            (
+                "@Property --x { syntax: '<length>'; inherits: false }\n",
+                "syntax",
+                "'<length>'",
+            ),
+        ] {
+            let rules = stylesheet(src).unwrap_or_else(|e| panic!("{src:?}: {e:?}"));
+            let Body::Declarations { declarations, .. } = &rules[0].body else {
+                panic!("{src:?}: {:?}", rules[0].body);
+            };
+            assert_eq!(declarations[0].property, property, "{src:?}");
+            assert_eq!(declarations[0].value, value, "{src:?}");
+        }
+        assert_eq!(
+            edit(sheet(), "@Page { margin: 1in }\n", |e| e.set_value(
+                &[Segment::Key("@Page"), Segment::Key("margin")],
+                "2in"
+            )),
+            "@Page { margin: 2in }\n"
+        );
+        let rules = stylesheet("@MEDIA print { a { color: red } }\n").unwrap();
+        let Body::Rules { rules, .. } = &rules[0].body else {
+            panic!("@MEDIA holds rules: {:?}", rules[0].body);
+        };
+        assert_eq!(rules.len(), 1);
     }
 }
