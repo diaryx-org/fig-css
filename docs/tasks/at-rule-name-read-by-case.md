@@ -1,13 +1,20 @@
 ---
 title: An at-rule holding declarations is known only in lower case
 description: '`@FONT-FACE`, `@Page` and the other declaration at-rules spelled in any case but lower are read as holding rules, so their declarations are refused as selectors and the whole stylesheet fails to parse'
-status: open
+status: done
 created: 2026-10-30
 updated: 2026-10-30
 part_of: "[Tasks](tasks.md)"
 ---
 
 # An at-rule holding declarations is known only in lower case
+
+**Status.** Done, by `fix: an at-rule holding declarations is known in any
+case`. `holds_rule_list` now matches the name against
+`DECLARATION_AT_RULES` with `eq_ignore_ascii_case`, and
+`an_at_rule_holding_declarations_is_known_in_any_case` in `src/lib.rs`
+holds the repro's sheets, an edit under `@Page`, and `@MEDIA` still holding
+rules.
 
 CSS compares an at-rule's name without regard to ASCII case (CSS 2.1
 §4.1.3: everything in a stylesheet is case-insensitive in the ASCII range
