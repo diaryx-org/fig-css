@@ -2,7 +2,7 @@
 title: Tasks
 description: Deferred work in fig-css — one file each, every one with a done state
 created: 2026-10-22
-updated: 2026-10-30
+updated: 2026-11-03
 contents:
   - "[A comment holding an opener cuts a value short](comment-holding-an-opener.md)"
   - "[Setting a repeated property edits the one that does not apply](repeated-property-set-at-the-first.md)"

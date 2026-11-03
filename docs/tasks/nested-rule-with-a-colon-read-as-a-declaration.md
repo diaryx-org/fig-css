@@ -1,13 +1,23 @@
 ---
 title: A nested rule whose selector has a colon is read as a declaration
 description: Inside a declaration block, `&:hover { … }` or `a:hover { … }` is read as a property `&` or `a` whose value is `hover { … }`, so the nested rule is not in the tree and an edit to it is `NotFound`
-status: open
+status: done
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-03
 part_of: "[Tasks](tasks.md)"
 ---
 
 # A nested rule whose selector has a colon is read as a declaration
+
+**Status.** Done, by `fix: a nested rule whose selector has a colon is
+read as a rule`, the first candidate below. `Parser::declarations` reads
+what has a `{…}` at depth zero before its `;` as a nested rule, unless its
+name before the first `:` is a custom property's. A name that is not an
+identifier but has no block after it (`&:hover;`) is still read as a
+declaration, as it was, rather than refused.
+`a_nested_rule_whose_selector_has_a_colon_is_a_rule` in `src/lib.rs`
+holds the repro's sheets, `&::before` and `:is(b, c):focus`, the edit to
+`a`/`&:hover`/`color`, and `--x: { a: b }` as a declaration.
 
 The crate's docs say a declaration block may nest a rule, as CSS nesting
 does. `Parser::declarations` tells a nested rule from a declaration by the
