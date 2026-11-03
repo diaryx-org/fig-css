@@ -396,6 +396,12 @@ impl Parser<'_> {
 
     /// The declarations in `[from, to)`, under `parent` — and a nested
     /// rule, where one stands among them.
+    ///
+    /// As CSS Syntax 3 reads a block's contents: what has a `{…}` at depth
+    /// zero before its `;` is a nested rule, unless it is a custom property
+    /// (`--x: { a: b }`), whose value may hold braces. A selector can hold
+    /// a colon before its `{` (`&:hover`, `a:focus`, `::before`), so the
+    /// first `:` does not make a declaration.
     fn declarations(&mut self, parent: u32, from: usize, to: usize) -> Result<(), LanguageError> {
         let mut i = from;
         loop {
@@ -412,22 +418,29 @@ impl Parser<'_> {
             }
             let start = i;
             let stop = self.scan(i, to, b":;{")?;
-            if stop < to && self.b[stop] == b'{' {
+            let custom = stop < to
+                && self.b[stop] == b':'
+                && self.src[start..self.trim_end(start, stop)].starts_with("--");
+            let open = match custom {
+                true => to,
+                false => self.scan(i, to, b";{")?,
+            };
+            if open < to && self.b[open] == b'{' {
                 // A nested rule: a selector over a block of its own.
-                let close = self.close_of(stop, to)?;
+                let close = self.close_of(open, to)?;
                 let kv = self.t.push(NodeRow::new(
                     NodeKind::KeyValue,
                     Some(parent),
                     span(start, close + 1),
                 ));
-                let key_end = self.trim_end(start, stop);
+                let key_end = self.trim_end(start, open);
                 self.string(kv, start, key_end);
                 let block = self.t.push(NodeRow::new(
                     NodeKind::Mapping,
                     Some(kv),
-                    span(stop, close + 1),
+                    span(open, close + 1),
                 ));
-                self.declarations(block, stop + 1, close)?;
+                self.declarations(block, open + 1, close)?;
                 i = close + 1;
                 continue;
             }
@@ -1000,5 +1013,64 @@ mod tests {
             panic!("@MEDIA holds rules: {:?}", rules[0].body);
         };
         assert_eq!(rules.len(), 1);
+    }
+
+    /// A nested rule's selector may hold a colon before its `{`, as
+    /// `&:hover` does. A declaration's value holds no `{…}` at depth zero,
+    /// unless it is a custom property's, so one that does is a rule.
+    #[test]
+    fn a_nested_rule_whose_selector_has_a_colon_is_a_rule() {
+        for (src, selector) in [
+            ("a { color: red; &:hover { color: blue } }\n", "&:hover"),
+            ("a { span:hover { color: blue } }\n", "span:hover"),
+            ("a { &::before { color: blue } }\n", "&::before"),
+            ("a { :is(b, c):focus { color: blue } }\n", ":is(b, c):focus"),
+        ] {
+            let rules = stylesheet(src).unwrap_or_else(|e| panic!("{src:?}: {e:?}"));
+            let Body::Declarations {
+                declarations,
+                rules: nested,
+                ..
+            } = &rules[0].body
+            else {
+                panic!("{src:?}: {:?}", rules[0].body);
+            };
+            assert!(
+                declarations
+                    .iter()
+                    .all(|d| d.property != "&" && d.property != "span"),
+                "{src:?}: {declarations:?}"
+            );
+            assert_eq!(nested.len(), 1, "{src:?}");
+            assert_eq!(&src[nested[0].prelude.clone()], selector, "{src:?}");
+            assert_eq!(nested[0].declared("color"), Some("blue"), "{src:?}");
+        }
+
+        let src = "a { color: red; &:hover { color: blue } }\n";
+        assert_eq!(
+            edit(sheet(), src, |e| e.set_value(
+                &[
+                    Segment::Key("a"),
+                    Segment::Key("&:hover"),
+                    Segment::Key("color")
+                ],
+                "green"
+            )),
+            src.replace("blue", "green")
+        );
+
+        let rules = stylesheet("a { --x: { a: b }; color: red }\n").unwrap();
+        assert_eq!(rules[0].declared("--x"), Some("{ a: b }"));
+        assert_eq!(rules[0].declared("color"), Some("red"));
+        assert_eq!(
+            declaration("--x: { a: b }; fill: red", "--x").as_deref(),
+            Some("{ a: b }")
+        );
+
+        // With no block after it, a colon still makes a declaration, as it
+        // did: nothing here refuses what it read before.
+        let rules = stylesheet("a { &:hover; color: red }\n").unwrap();
+        assert_eq!(rules[0].declared("&"), Some("hover"));
+        assert_eq!(rules[0].declared("color"), Some("red"));
     }
 }
