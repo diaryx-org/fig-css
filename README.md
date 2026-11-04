@@ -22,7 +22,7 @@ its two callers need, as written, and decodes no value.
 |---|---|
 | `declaration(list, property)` | the value a `style` gives a property, as written; the last where it repeats |
 | `declarations(list)` | every declaration of a `style`, in order, with its span |
-| `with_declaration(list, property, value)` | the `style` with one property set, changed or (for `None`) taken out, and every other byte kept |
+| `with_declaration(list, property, value)` | the `style` with one property set, changed or (for `None`) taken out, and every other byte kept; where it repeats, the last is set and every repeat taken out |
 | `stylesheet(css)` | a stylesheet's rules, each with the spans of its parts, so a caller splices where the parser says |
 | `selectors(list)` | a selector list split at its top-level commas |
 | `formats()` | the two registered formats, `css` and `css-declarations`, for anything else fig does with them |

@@ -1,13 +1,21 @@
 ---
 title: Setting a repeated property edits the one that does not apply
 description: When a list gives a property twice, `with_declaration` sets or removes the first, and `declaration` goes on reading the last, so the edit makes no difference
-status: open
+status: done
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-11-03
 part_of: "[Tasks](tasks.md)"
 ---
 
 # Setting a repeated property edits the one that does not apply
+
+**Status.** Done, by `fix: a repeated property is set and removed where it
+applies`, the first candidate below without its new span: the last repeat
+and what follows it is a declaration list of its own, so `with_declaration`
+has fig's editor set the value there and keeps what comes before it, and
+`Declaration` stays as it was. A removal takes every repeat, in every
+spelling. `a_repeated_property_is_edited_where_it_applies` in `src/lib.rs`
+holds both assertions.
 
 A declaration list may give a property more than once. The last one is the one
 that applies, and `declaration` and `Rule::declared` read that one.

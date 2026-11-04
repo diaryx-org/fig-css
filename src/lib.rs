@@ -27,7 +27,8 @@
 //! taking only its own bytes. Inserting into an at-rule's block of rules is
 //! not supported: its members are separated by nothing but whitespace, and
 //! the separator a dialect declares is `;`. A property or a selector that
-//! repeats is in the tree each time; a path names the first.
+//! repeats is in the tree each time; a path names the first, and
+//! [`with_declaration`] edits the one that applies.
 //!
 //! Not a general CSS parser, and not meant to become one: it reads what thorn
 //! (an SVG's `<style>` and `style` attributes) and leaf (a paragraph's or a
@@ -709,26 +710,51 @@ pub fn declarations(list: &str) -> Vec<Declaration> {
 /// `list` with `property` set to `value` — its value replaced where it has
 /// one, a declaration added after the last where it has none — or, for
 /// `None`, taken out. Every other byte is the list's own.
+///
+/// Where the property repeats, a set is made to the last, the one that
+/// applies, and an earlier repeat stays as it was written; a removal takes
+/// every repeat, since taking one would bring the one before it into effect.
 pub fn with_declaration(list: &str, property: &str, value: Option<&str>) -> Result<String, String> {
     let format = formats()?.declarations;
-    let mut editor = fig::Editor::open(list.as_bytes(), format).map_err(|e| e.to_string())?;
-    // The property as the list already spells it, so `TEXT-ALIGN` is
-    // rewritten rather than joined by a second `text-align`.
-    let written = declarations(list)
-        .into_iter()
-        .find(|d| same_property(&d.property, property))
-        .map(|d| d.property);
-    let path = [fig::Segment::Key(written.as_deref().unwrap_or(property))];
-    let result = match value {
-        Some(value) => editor.set_value(&path, value),
-        None if declaration(list, property).is_none() => return Ok(list.to_string()),
-        None => editor.delete_key(&path),
+    let open = |text: &str| fig::Editor::open(text.as_bytes(), format).map_err(|e| e.to_string());
+    let text = |editor: &fig::Editor| {
+        editor
+            .source()
+            .map(str::to_string)
+            .map_err(|e| e.to_string())
     };
-    result.map_err(|e| e.to_string())?;
+    let held = |source: &str| {
+        declarations(source)
+            .into_iter()
+            .filter(|d| same_property(&d.property, property))
+            .collect::<Vec<_>>()
+    };
+
+    let Some(value) = value else {
+        let mut editor = open(list)?;
+        // Each pass takes the first repeat, which is what a path names, as
+        // the list spells it, so `TEXT-ALIGN` goes with `text-align`.
+        while let Some(first) = held(&text(&editor)?).into_iter().next() {
+            editor
+                .delete_key(&[fig::Segment::Key(&first.property)])
+                .map_err(|e| e.to_string())?;
+        }
+        return text(&editor);
+    };
+
+    // A path names the first repeat and fig has no segment for a later one,
+    // but the last repeat is the first of the list that starts at it, so the
+    // edit is made there and what comes before it is kept as it stands.
+    // Spelled as the list spells it, `TEXT-ALIGN` is rewritten rather than
+    // joined by a second `text-align`.
+    let last = held(list).pop();
+    let (head, tail) = list.split_at(last.as_ref().map_or(0, |d| d.span.start));
+    let written = last.as_ref().map_or(property, |d| &d.property);
+    let mut editor = open(tail)?;
     editor
-        .source()
-        .map(str::to_string)
-        .map_err(|e| e.to_string())
+        .set_value(&[fig::Segment::Key(written)], value)
+        .map_err(|e| e.to_string())?;
+    Ok(format!("{head}{}", text(&editor)?))
 }
 
 #[cfg(test)]
@@ -1072,5 +1098,54 @@ mod tests {
         let rules = stylesheet("a { &:hover; color: red }\n").unwrap();
         assert_eq!(rules[0].declared("&"), Some("hover"));
         assert_eq!(rules[0].declared("color"), Some("red"));
+    }
+
+    #[test]
+    fn a_repeated_property_is_edited_where_it_applies() {
+        let set = |list: &str, v: Option<&str>| with_declaration(list, "fill", v).unwrap();
+        // The last repeat is the one that applies, so a set is made there
+        // and an earlier repeat stays as it was written.
+        assert_eq!(
+            set("fill: red; fill: blue", Some("green")),
+            "fill: red; fill: green"
+        );
+        assert_eq!(
+            set(
+                "FILL: red; stroke:#000 ;/* c */ Fill:blue; opacity: 1",
+                Some("green")
+            ),
+            "FILL: red; stroke:#000 ;/* c */ Fill:green; opacity: 1"
+        );
+        // A removal takes every repeat, whatever its spelling: taking one
+        // would bring the one before it into effect.
+        assert_eq!(set("fill: red; fill: blue", None), "");
+        assert_eq!(
+            set("a: 1; FILL: red; b: 2; fill: blue; c: 3", None),
+            "a: 1; b: 2; c: 3"
+        );
+
+        for list in [
+            "fill: red; fill: blue",
+            "fill:red;fill:blue;",
+            "FILL: red; fill: blue",
+            "fill: red; stroke: #000; Fill: blue; fill: pink; opacity: 1",
+            "fill: red;\n  fill: blue;\n",
+        ] {
+            let got = set(list, Some("green"));
+            assert_eq!(
+                declaration(&got, "fill").as_deref(),
+                Some("green"),
+                "{list:?}"
+            );
+            let got = set(list, None);
+            assert_eq!(declaration(&got, "fill"), None, "{list:?}");
+        }
+
+        // A custom property's name is case-sensitive, so its repeats are
+        // only those spelled alike.
+        assert_eq!(
+            with_declaration("--x: 1; --X: 2; --x: 3", "--x", None).unwrap(),
+            "--X: 2"
+        );
     }
 }
