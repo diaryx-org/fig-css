@@ -1,13 +1,19 @@
 ---
 title: A rule's declared reads a property by its case
 description: '`Rule::declared` compares a property name byte for byte, so `FILL: red` is not found under `fill`, and in `fill: red; FILL: blue` it answers the value that does not apply'
-status: open
+status: done
 created: 2026-11-05
 updated: 2026-11-05
 part_of: "[Tasks](tasks.md)"
 ---
 
 # A rule's declared reads a property by its case
+
+**Status.** Done, by `fix: a rule's declared reads a property in any case`:
+`Rule::declared` matches through `same_property`, and
+`a_rule_reads_a_property_in_any_case` in `src/lib.rs` holds the repro, a
+custom property staying case-sensitive, and the value and the
+`Declaration`'s `property` staying as written.
 
 CSS compares a property name without regard to ASCII case, except a custom
 property's (`--brand`). `same_property` says so, and `declaration` and

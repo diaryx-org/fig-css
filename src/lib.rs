@@ -569,13 +569,14 @@ impl Rule {
         }
     }
 
-    /// The value this rule's block gives `property`: the last, where it
-    /// repeats, since that is the one that applies.
+    /// The value this rule's block gives `property`, in any ASCII case but
+    /// a custom property's: the last, where it repeats, since that is the
+    /// one that applies.
     pub fn declared(&self, property: &str) -> Option<&str> {
         self.declarations()
             .iter()
             .rev()
-            .find(|d| d.property == property)
+            .find(|d| same_property(&d.property, property))
             .map(|d| d.value.as_str())
     }
 }
@@ -1147,5 +1148,31 @@ mod tests {
             with_declaration("--x: 1; --X: 2; --x: 3", "--x", None).unwrap(),
             "--X: 2"
         );
+    }
+
+    #[test]
+    fn a_rule_reads_a_property_in_any_case() {
+        let rule = |css| stylesheet(css).unwrap().remove(0);
+
+        assert_eq!(rule("rect { FILL: red }").declared("fill"), Some("red"));
+        assert_eq!(rule("rect { fill: red }").declared("FILL"), Some("red"));
+
+        // The last repeat applies, whatever each is spelled.
+        assert_eq!(
+            rule("rect { fill: red; FILL: blue }").declared("fill"),
+            Some("blue")
+        );
+
+        // A custom property's name is case-sensitive.
+        assert_eq!(rule("rect { --Brand: red }").declared("--brand"), None);
+        assert_eq!(
+            rule("rect { --brand: red; --Brand: blue }").declared("--brand"),
+            Some("red")
+        );
+
+        // Only the comparison changes: the value and the name stay as written.
+        let spelled = rule("rect { FILL: Red }");
+        assert_eq!(spelled.declared("fill"), Some("Red"));
+        assert_eq!(spelled.declarations()[0].property, "FILL");
     }
 }
