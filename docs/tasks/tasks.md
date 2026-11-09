@@ -2,13 +2,14 @@
 title: Tasks
 description: Deferred work in fig-css — one file each, every one with a done state
 created: 2026-10-22
-updated: 2026-11-05
+updated: 2026-11-08
 contents:
   - "[A comment holding an opener cuts a value short](comment-holding-an-opener.md)"
   - "[Setting a repeated property edits the one that does not apply](repeated-property-set-at-the-first.md)"
   - "[A nested rule whose selector has a colon is read as a declaration](nested-rule-with-a-colon-read-as-a-declaration.md)"
   - "[An at-rule holding declarations is known only in lower case](at-rule-name-read-by-case.md)"
   - "[A rule's declared reads a property by its case](declared-reads-a-property-by-case.md)"
+  - "[A rule holding a nested rule prints its declarations as statements](a-nested-rule-prints-as-a-statement.md)"
 ---
 
 # Tasks
